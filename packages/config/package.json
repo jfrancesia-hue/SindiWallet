@@ -1,0 +1,12 @@
+{
+  "name": "@sindiwallet/config",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "tsconfig.base.json",
+    "tsconfig.nestjs.json",
+    "tsconfig.react-native.json",
+    "eslint.config.mjs",
+    "prettier.config.mjs"
+  ]
+}

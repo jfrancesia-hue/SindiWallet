@@ -1,0 +1,550 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ====================== MULTI-TENANCY ======================
+
+model Organization {
+  id             String   @id @default(cuid())
+  name           String
+  slug           String   @unique
+  cuit           String   @unique
+  logo           String?
+  primaryColor   String   @default("#1F2B6C")
+  secondaryColor String   @default("#00A89D")
+  accentColor    String   @default("#F58220")
+  address        String?
+  phone          String?
+  email          String?
+  website        String?
+  isActive       Boolean  @default(true)
+  settings       Json     @default("{}")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  users           User[]
+  wallets         Wallet[]
+  transactions    Transaction[]
+  dues            Due[]
+  benefits        Benefit[]
+  benefitRequests BenefitRequest[]
+  loans           Loan[]
+  merchants       Merchant[]
+  reports         Report[]
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  importJobs      ImportJob[]
+
+  @@map("organizations")
+}
+
+// ====================== USERS ======================
+
+model User {
+  id             String    @id @default(cuid())
+  orgId          String
+  supabaseUserId String    @unique
+  email          String
+  phone          String?
+  firstName      String
+  lastName       String
+  dni            String
+  cuit           String?
+  role           Role      @default(AFFILIATE)
+  avatarUrl      String?
+  dateOfBirth    DateTime?
+  address        String?
+  city           String?
+  province       String?
+  postalCode     String?
+  employerName   String?
+  employerCuit   String?
+  salary         Decimal?  @db.Decimal(12, 2)
+  memberSince    DateTime?
+  kycStatus      KycStatus @default(PENDING)
+  kycData        Json?
+  isActive       Boolean   @default(true)
+  fcmToken       String?
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization         Organization     @relation(fields: [orgId], references: [id])
+  wallet               Wallet?
+  sentTransactions     Transaction[]    @relation("sender")
+  receivedTransactions Transaction[]    @relation("receiver")
+  duePayments          DuePayment[]
+  benefitRequests      BenefitRequest[]
+  loans                Loan[]
+  merchantProfile      Merchant?
+  auditLogs            AuditLog[]
+  notifications        Notification[]
+  chatSessions         ChatSession[]
+
+  @@unique([orgId, email])
+  @@unique([orgId, dni])
+  @@index([orgId, role])
+  @@index([supabaseUserId])
+  @@map("users")
+}
+
+enum Role {
+  SUPERADMIN
+  ADMIN
+  AFFILIATE
+  MERCHANT
+}
+
+enum KycStatus {
+  PENDING
+  IN_REVIEW
+  APPROVED
+  REJECTED
+}
+
+// ====================== WALLETS ======================
+
+model Wallet {
+  id            String       @id @default(cuid())
+  orgId         String
+  userId        String       @unique
+  cvu           String?      @unique
+  alias         String?      @unique
+  balance       Decimal      @default(0) @db.Decimal(14, 2)
+  currency      String       @default("ARS")
+  status        WalletStatus @default(ACTIVE)
+  baasAccountId String?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  organization Organization  @relation(fields: [orgId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  outgoing     Transaction[] @relation("walletFrom")
+  incoming     Transaction[] @relation("walletTo")
+
+  @@index([orgId])
+  @@map("wallets")
+}
+
+enum WalletStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+// ====================== TRANSACTIONS ======================
+
+model Transaction {
+  id                String            @id @default(cuid())
+  orgId             String
+  idempotencyKey    String            @unique
+  type              TransactionType
+  status            TransactionStatus @default(PENDING)
+  amount            Decimal           @db.Decimal(14, 2)
+  fee               Decimal           @default(0) @db.Decimal(14, 2)
+  currency          String            @default("ARS")
+  description       String?
+  metadata          Json?
+  reference         String?
+  senderId          String?
+  receiverId        String?
+  walletFromId      String?
+  walletToId        String?
+  baasTransactionId String?
+  errorCode         String?
+  errorMessage      String?
+  processedAt       DateTime?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  sender       User?        @relation("sender", fields: [senderId], references: [id])
+  receiver     User?        @relation("receiver", fields: [receiverId], references: [id])
+  walletFrom   Wallet?      @relation("walletFrom", fields: [walletFromId], references: [id])
+  walletTo     Wallet?      @relation("walletTo", fields: [walletToId], references: [id])
+
+  @@index([orgId, type])
+  @@index([orgId, status])
+  @@index([senderId])
+  @@index([receiverId])
+  @@index([createdAt])
+  @@map("transactions")
+}
+
+enum TransactionType {
+  DEPOSIT
+  WITHDRAWAL
+  TRANSFER_INTERNAL
+  TRANSFER_CVU
+  PAYMENT_QR
+  PAYMENT_DEBIN
+  PAYMENT_MERCHANT
+  DUE_PAYMENT
+  DUE_RETENTION
+  LOAN_DISBURSEMENT
+  LOAN_REPAYMENT
+  BENEFIT_CREDIT
+  FEE
+  REFUND
+}
+
+enum TransactionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+  REVERSED
+  CANCELLED
+}
+
+// ====================== CUOTAS SINDICALES ======================
+
+model Due {
+  id              String       @id @default(cuid())
+  orgId           String
+  name            String
+  description     String?
+  amount          Decimal      @db.Decimal(12, 2)
+  percentOfSalary Decimal?     @db.Decimal(5, 4)
+  frequency       DueFrequency @default(MONTHLY)
+  isActive        Boolean      @default(true)
+  isRetention     Boolean      @default(false)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  payments     DuePayment[]
+
+  @@index([orgId])
+  @@map("dues")
+}
+
+enum DueFrequency {
+  MONTHLY
+  QUARTERLY
+  ANNUAL
+}
+
+model DuePayment {
+  id            String           @id @default(cuid())
+  dueId         String
+  userId        String
+  period        String // "2026-04"
+  amount        Decimal          @db.Decimal(12, 2)
+  status        DuePaymentStatus @default(PENDING)
+  paidAt        DateTime?
+  transactionId String?
+  source        DuePaymentSource @default(WALLET)
+  retentionRef  String?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  due  Due  @relation(fields: [dueId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([dueId, userId, period])
+  @@index([userId])
+  @@map("due_payments")
+}
+
+enum DuePaymentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  EXEMPT
+}
+
+enum DuePaymentSource {
+  WALLET
+  RETENTION
+  EXTERNAL
+}
+
+// ====================== BENEFICIOS ======================
+
+model Benefit {
+  id               String   @id @default(cuid())
+  orgId            String
+  name             String
+  description      String?
+  category         String
+  amount           Decimal? @db.Decimal(12, 2)
+  maxAmount        Decimal? @db.Decimal(12, 2)
+  requiresApproval Boolean  @default(true)
+  isActive         Boolean  @default(true)
+  requirements     Json?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization Organization     @relation(fields: [orgId], references: [id])
+  requests     BenefitRequest[]
+
+  @@index([orgId])
+  @@map("benefits")
+}
+
+model BenefitRequest {
+  id            String               @id @default(cuid())
+  orgId         String
+  benefitId     String
+  userId        String
+  status        BenefitRequestStatus @default(PENDING)
+  amount        Decimal              @db.Decimal(12, 2)
+  notes         String?
+  attachments   Json?
+  reviewedBy    String?
+  reviewedAt    DateTime?
+  reviewNotes   String?
+  transactionId String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  benefit      Benefit      @relation(fields: [benefitId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([orgId, status])
+  @@index([userId])
+  @@map("benefit_requests")
+}
+
+enum BenefitRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  DISBURSED
+  CANCELLED
+}
+
+// ====================== MICROPRESTAMOS ======================
+
+model Loan {
+  id                 String     @id @default(cuid())
+  orgId              String
+  userId             String
+  amount             Decimal    @db.Decimal(14, 2)
+  interestRate       Decimal    @db.Decimal(5, 4)
+  termMonths         Int
+  monthlyPayment     Decimal    @db.Decimal(12, 2)
+  totalAmount        Decimal    @db.Decimal(14, 2)
+  outstandingBalance Decimal    @db.Decimal(14, 2)
+  status             LoanStatus @default(PENDING)
+  scoringResult      Json?
+  disbursedAt        DateTime?
+  nextPaymentDate    DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+
+  organization Organization      @relation(fields: [orgId], references: [id])
+  user         User              @relation(fields: [userId], references: [id])
+  installments LoanInstallment[]
+
+  @@index([orgId, status])
+  @@index([userId])
+  @@map("loans")
+}
+
+enum LoanStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  ACTIVE
+  PAID_OFF
+  DEFAULTED
+  CANCELLED
+}
+
+model LoanInstallment {
+  id            String            @id @default(cuid())
+  loanId        String
+  number        Int
+  amount        Decimal           @db.Decimal(12, 2)
+  principal     Decimal           @db.Decimal(12, 2)
+  interest      Decimal           @db.Decimal(12, 2)
+  dueDate       DateTime
+  paidAt        DateTime?
+  status        InstallmentStatus @default(PENDING)
+  transactionId String?
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  loan Loan @relation(fields: [loanId], references: [id])
+
+  @@unique([loanId, number])
+  @@map("loan_installments")
+}
+
+enum InstallmentStatus {
+  PENDING
+  PAID
+  OVERDUE
+  WAIVED
+}
+
+// ====================== COMERCIOS ======================
+
+model Merchant {
+  id                  String   @id @default(cuid())
+  orgId               String
+  userId              String   @unique
+  businessName        String
+  cuit                String
+  category            String
+  address             String?
+  phone               String?
+  discountPercent     Decimal  @default(0) @db.Decimal(5, 2)
+  isActive            Boolean  @default(true)
+  qrCode              String?
+  settlementFrequency String   @default("WEEKLY")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([orgId])
+  @@map("merchants")
+}
+
+// ====================== NOTIFICACIONES ======================
+
+model Notification {
+  id        String              @id @default(cuid())
+  orgId     String
+  userId    String
+  channel   NotificationChannel
+  title     String
+  body      String
+  data      Json?
+  isRead    Boolean             @default(false)
+  sentAt    DateTime?
+  readAt    DateTime?
+  createdAt DateTime            @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@index([userId, isRead])
+  @@index([orgId])
+  @@map("notifications")
+}
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+  WHATSAPP
+  IN_APP
+}
+
+// ====================== REPORTES ======================
+
+model Report {
+  id          String       @id @default(cuid())
+  orgId       String
+  type        String
+  parameters  Json
+  format      String       @default("PDF")
+  fileUrl     String?
+  status      ReportStatus @default(PENDING)
+  generatedAt DateTime?
+  createdAt   DateTime     @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@map("reports")
+}
+
+enum ReportStatus {
+  PENDING
+  GENERATING
+  COMPLETED
+  FAILED
+}
+
+// ====================== AI CHATBOT ======================
+
+model ChatSession {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String?
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id])
+  messages ChatMessage[]
+
+  @@index([userId])
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  sessionId String
+  role      String // "user" | "assistant"
+  content   String
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  session ChatSession @relation(fields: [sessionId], references: [id])
+
+  @@map("chat_messages")
+}
+
+// ====================== IMPORTACION ======================
+
+model ImportJob {
+  id            String       @id @default(cuid())
+  orgId         String
+  type          String
+  fileName      String
+  totalRows     Int          @default(0)
+  processedRows Int          @default(0)
+  errorRows     Int          @default(0)
+  status        ImportStatus @default(PENDING)
+  errors        Json?
+  createdAt     DateTime     @default(now())
+  completedAt   DateTime?
+
+  organization Organization @relation(fields: [orgId], references: [id])
+
+  @@index([orgId])
+  @@map("import_jobs")
+}
+
+enum ImportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ====================== AUDIT LOG ======================
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  orgId     String
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  oldData   Json?
+  newData   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  organization Organization @relation(fields: [orgId], references: [id])
+  user         User?        @relation(fields: [userId], references: [id])
+
+  @@index([orgId, entity, createdAt])
+  @@index([userId])
+  @@map("audit_logs")
+}
