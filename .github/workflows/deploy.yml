@@ -1,0 +1,97 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ['CI']
+    branches: [main]
+    types: [completed]
+
+jobs:
+  deploy-api:
+    name: Deploy API
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter @sindiwallet/db db:generate
+
+      - name: Run database migrations
+        run: npx prisma migrate deploy
+        working-directory: packages/db
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy API to Railway
+        run: railway up --service sindiwallet-api -d
+
+  deploy-admin:
+    name: Deploy Admin
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    env:
+      RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm i -g @railway/cli
+
+      - name: Deploy Admin to Railway
+        run: railway up --service sindiwallet-admin -d
+
+  deploy-mobile:
+    name: Deploy Mobile
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    env:
+      EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            mobile:
+              - 'apps/mobile/**'
+
+      - uses: pnpm/action-setup@v4
+        if: steps.changes.outputs.mobile == 'true'
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        if: steps.changes.outputs.mobile == 'true'
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        if: steps.changes.outputs.mobile == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Install EAS CLI
+        if: steps.changes.outputs.mobile == 'true'
+        run: npm i -g eas-cli
+
+      - name: Build mobile app
+        if: steps.changes.outputs.mobile == 'true'
+        run: eas build --platform all --non-interactive --profile production
+        working-directory: apps/mobile

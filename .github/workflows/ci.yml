@@ -1,0 +1,131 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+
+  test-unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.prisma
+          key: prisma-${{ hashFiles('packages/db/prisma/schema.prisma') }}
+
+      - run: pnpm --filter @sindiwallet/db db:generate
+      - run: pnpm run test
+
+  test-e2e:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: sindiwallet_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - '5432:5432'
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sindiwallet_test
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/sindiwallet_test
+      APP_ENV: test
+      SUPABASE_URL: http://localhost:mock
+      SUPABASE_ANON_KEY: mock-anon-key
+      SUPABASE_SERVICE_ROLE_KEY: mock-service-role-key
+      JWT_SECRET: test-jwt-secret
+      ENCRYPTION_KEY: test-32-char-encryption-key-xxxx
+      ANTHROPIC_API_KEY: sk-ant-test-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.prisma
+          key: prisma-${{ hashFiles('packages/db/prisma/schema.prisma') }}
+
+      - run: pnpm --filter @sindiwallet/db db:generate
+      - run: pnpm --filter @sindiwallet/db db:push
+      - run: pnpm --filter @sindiwallet/api test:e2e
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test-unit, test-e2e]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - run: pnpm install --frozen-lockfile
+
+      - uses: actions/cache@v4
+        with:
+          path: node_modules/.prisma
+          key: prisma-${{ hashFiles('packages/db/prisma/schema.prisma') }}
+
+      - run: pnpm --filter @sindiwallet/db db:generate
+      - run: pnpm run build
