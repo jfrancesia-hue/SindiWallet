@@ -11,6 +11,7 @@
     "db:generate": "turbo run db:generate",
     "db:migrate": "turbo run db:migrate",
     "db:seed": "turbo run db:seed",
+    "db:migrate:deploy": "turbo run db:migrate:deploy",
     "clean": "turbo run clean"
   },
   "devDependencies": {

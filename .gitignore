@@ -24,7 +24,6 @@ dist/
 Thumbs.db
 
 # Prisma
-packages/db/prisma/migrations/
 
 # Laravel
 apps/web-admin/storage/

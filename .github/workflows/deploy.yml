@@ -32,8 +32,7 @@ jobs:
         run: pnpm --filter @sindiwallet/db db:generate
 
       - name: Run database migrations
-        run: npx prisma migrate deploy
-        working-directory: packages/db
+        run: pnpm --filter @sindiwallet/db db:migrate:deploy
 
       - name: Install Railway CLI
         run: npm i -g @railway/cli
