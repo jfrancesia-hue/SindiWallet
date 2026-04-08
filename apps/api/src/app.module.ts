@@ -23,6 +23,7 @@ import { WebsocketModule } from './websocket/websocket.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { AuditInterceptor } from './audit/audit.interceptor';
+import { ComplianceModule } from './common/compliance/compliance.module';
 
 @Module({
   imports: [
@@ -43,6 +44,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
         limit: 100,
       },
     ]),
+    ComplianceModule,
     PrismaModule,
     AuthModule,
     OrganizationsModule,

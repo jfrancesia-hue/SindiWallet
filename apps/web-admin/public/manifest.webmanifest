@@ -1,0 +1,21 @@
+{
+  "name": "SindiWallet Admin",
+  "short_name": "SindiWallet",
+  "description": "Panel de administración SindiWallet — Billetera virtual para sindicatos",
+  "start_url": "/dashboard",
+  "display": "standalone",
+  "background_color": "#0D1440",
+  "theme_color": "#1F2B6C",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["finance", "business"],
+  "lang": "es-AR",
+  "dir": "ltr"
+}

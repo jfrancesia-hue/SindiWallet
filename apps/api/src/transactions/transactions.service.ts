@@ -9,12 +9,14 @@ import { TransferDto } from './dto/transfer.dto';
 import { TransferCvuDto } from './dto/transfer-cvu.dto';
 import { TransactionFilterDto } from './dto/transaction-filter.dto';
 import { TransactionType, TransactionStatus, Prisma } from '@sindiwallet/db';
+import { ComplianceService } from '../common/compliance/compliance.service';
 
 @Injectable()
 export class TransactionsService {
   constructor(
     private prisma: PrismaService,
     private engine: TransactionEngineService,
+    private compliance: ComplianceService,
   ) {}
 
   async transfer(orgId: string, senderId: string, dto: TransferDto) {
@@ -40,6 +42,13 @@ export class TransactionsService {
     if (senderWallet.id === receiverWallet.id) {
       throw new BadRequestException('No podés transferirte a vos mismo');
     }
+
+    await this.compliance.validateTransaction({
+      userId: senderId,
+      orgId,
+      amount: dto.amount,
+      type: 'TRANSFER_INTERNAL',
+    });
 
     return this.engine.executeTransfer({
       orgId,
@@ -78,6 +87,13 @@ export class TransactionsService {
         `Saldo insuficiente. Disponible: ${senderWallet.balance.toFixed(2)} ARS`,
       );
     }
+
+    await this.compliance.validateTransaction({
+      userId: senderId,
+      orgId,
+      amount: dto.amount,
+      type: 'TRANSFER_CVU',
+    });
 
     // Mock BaaS: descontar el saldo y crear transacción como COMPLETED
     const [, transaction] = await this.prisma.$transaction([
