@@ -1,13 +1,17 @@
 import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../websocket/events.gateway';
+import { FirebaseService } from './firebase.service';
 import { CreateNotificationDto, BulkNotificationDto } from './dto/create-notification.dto';
 import { NotificationChannel, Prisma } from '@sindiwallet/db';
 
 @Injectable()
 export class NotificationsService {
+  private deviceTokens = new Map<string, { token: string; platform: string; deviceId: string }[]>();
+
   constructor(
     private prisma: PrismaService,
+    private firebase: FirebaseService,
     @Optional() private events?: EventsGateway,
   ) {}
 
@@ -31,6 +35,26 @@ export class NotificationsService {
       body: dto.body,
       channel: dto.channel,
     });
+
+    // Send push notification via FCM
+    if (dto.channel === 'PUSH' && this.firebase.isEnabled) {
+      const devices = this.deviceTokens.get(dto.userId) ?? [];
+      const tokens = devices.map((d) => d.token);
+      if (tokens.length > 0) {
+        const result = await this.firebase.sendToMultiple(
+          tokens,
+          { title: dto.title, body: dto.body },
+          dto.data as Record<string, string> | undefined,
+        );
+        // Remove invalid tokens
+        if (result.failedTokens.length > 0) {
+          const validDevices = devices.filter(
+            (d) => !result.failedTokens.includes(d.token),
+          );
+          this.deviceTokens.set(dto.userId, validDevices);
+        }
+      }
+    }
 
     return notification;
   }
@@ -106,5 +130,21 @@ export class NotificationsService {
       where: { orgId, userId, isRead: false },
     });
     return { unread: count };
+  }
+
+  registerDevice(userId: string, fcmToken: string, platform: string, deviceId: string) {
+    const devices = this.deviceTokens.get(userId) ?? [];
+    // Replace existing entry for same deviceId
+    const filtered = devices.filter((d) => d.deviceId !== deviceId);
+    filtered.push({ token: fcmToken, platform, deviceId });
+    this.deviceTokens.set(userId, filtered);
+    return { registered: true };
+  }
+
+  unregisterDevice(userId: string, fcmToken: string) {
+    const devices = this.deviceTokens.get(userId) ?? [];
+    const filtered = devices.filter((d) => d.token !== fcmToken);
+    this.deviceTokens.set(userId, filtered);
+    return { unregistered: true };
   }
 }

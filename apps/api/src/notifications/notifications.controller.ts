@@ -10,6 +10,7 @@ import {
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { NotificationsService } from './notifications.service';
 import { CreateNotificationDto, BulkNotificationDto } from './dto/create-notification.dto';
+import { RegisterDeviceDto } from './dto/register-device.dto';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { OrgId } from '../common/decorators/org-id.decorator';
 import { Roles } from '../common/decorators/roles.decorator';
@@ -60,6 +61,26 @@ export class NotificationsController {
   @ApiOperation({ summary: 'Marcar todas como leídas' })
   markAllRead(@OrgId() orgId: string, @CurrentUser('id') userId: string) {
     return this.notificationsService.markAllRead(orgId, userId);
+  }
+
+  // ── Devices ──
+
+  @Post('devices/register')
+  @ApiOperation({ summary: 'Registrar dispositivo para push notifications' })
+  registerDevice(
+    @CurrentUser('id') userId: string,
+    @Body() dto: RegisterDeviceDto,
+  ) {
+    return this.notificationsService.registerDevice(userId, dto.fcmToken, dto.platform, dto.deviceId);
+  }
+
+  @Post('devices/unregister')
+  @ApiOperation({ summary: 'Desregistrar dispositivo' })
+  unregisterDevice(
+    @CurrentUser('id') userId: string,
+    @Body('fcmToken') fcmToken: string,
+  ) {
+    return this.notificationsService.unregisterDevice(userId, fcmToken);
   }
 
   // ── Admin ──
