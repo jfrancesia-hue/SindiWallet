@@ -16,6 +16,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { ReportsModule } from './reports/reports.module';
 import { AuditModule } from './audit/audit.module';
 import { ImportsModule } from './imports/imports.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { AuditInterceptor } from './audit/audit.interceptor';
 
@@ -36,6 +37,7 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     ReportsModule,
     AuditModule,
     ImportsModule,
+    ChatbotModule,
   ],
   controllers: [AppController],
   providers: [
