@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Param,
+  Query,
   Body,
   UseGuards,
 } from '@nestjs/common';
@@ -38,6 +39,21 @@ export class WalletsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.walletsService.findByUser(orgId, userId);
+  }
+
+  @Get()
+  @Roles('ADMIN')
+  @ApiOperation({ summary: 'Listar todas las wallets (admin)' })
+  findAll(
+    @OrgId() orgId: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
+    return this.walletsService.findAll(
+      orgId,
+      page ? parseInt(page, 10) : 1,
+      limit ? parseInt(limit, 10) : 20,
+    );
   }
 
   @Get(':id')

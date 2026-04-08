@@ -95,6 +95,29 @@ export class WalletsService {
     return wallet;
   }
 
+  async findAll(orgId: string, page = 1, limit = 20) {
+    const skip = (page - 1) * limit;
+    const [data, total] = await Promise.all([
+      this.prisma.wallet.findMany({
+        where: { orgId },
+        skip,
+        take: limit,
+        orderBy: { createdAt: 'desc' },
+        include: {
+          user: {
+            select: { id: true, firstName: true, lastName: true, email: true, dni: true, role: true },
+          },
+        },
+      }),
+      this.prisma.wallet.count({ where: { orgId } }),
+    ]);
+
+    return {
+      data,
+      meta: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    };
+  }
+
   async freeze(orgId: string, id: string) {
     const wallet = await this.findOne(orgId, id);
 

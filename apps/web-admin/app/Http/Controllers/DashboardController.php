@@ -10,13 +10,18 @@ class DashboardController extends Controller
     {
         $api = new ApiClient();
         $user = session('user');
+        $orgId = $user['orgId'] ?? null;
 
-        $stats = $api->getOrganizationStats($user['orgId']);
+        $stats = $orgId ? $api->getDashboardStats($orgId) : [];
         $transactions = $api->getTransactions(['limit' => 10]);
+        $pendingBenefits = $api->getBenefitRequests(['status' => 'PENDING']);
+        $pendingLoans = $api->getLoans(['status' => 'PENDING']);
 
         return view('dashboard.index', [
-            'stats' => $stats['data'] ?? [],
-            'transactions' => $transactions['data'] ?? [],
+            'stats' => $stats['data'] ?? $stats,
+            'transactions' => $transactions['data']['data'] ?? [],
+            'pendingBenefits' => $pendingBenefits['data'] ?? [],
+            'pendingLoans' => $pendingLoans['data'] ?? [],
         ]);
     }
 }

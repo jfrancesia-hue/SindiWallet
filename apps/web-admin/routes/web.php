@@ -12,6 +12,8 @@ use App\Http\Controllers\LoanController;
 use App\Http\Controllers\MerchantController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\AuditController;
+use App\Http\Controllers\ImportController;
 
 // Auth (public)
 Route::get('/login', [LoginController::class, 'showLogin'])->name('login');
@@ -85,4 +87,13 @@ Route::middleware([\App\Http\Middleware\SupabaseAuth::class])->group(function ()
     // Notifications
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications/send', [NotificationController::class, 'send'])->name('notifications.send');
+
+    // Audit Log
+    Route::get('/audit', [AuditController::class, 'index'])->name('audit.index');
+
+    // Imports
+    Route::get('/imports', [ImportController::class, 'index'])->name('imports.index');
+    Route::get('/imports/create', [ImportController::class, 'create'])->name('imports.create');
+    Route::post('/imports', [ImportController::class, 'store'])->name('imports.store');
+    Route::get('/imports/{id}', [ImportController::class, 'show'])->name('imports.show');
 });

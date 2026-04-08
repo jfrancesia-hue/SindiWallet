@@ -236,6 +236,67 @@ class ApiClient
     // Notifications
     public function sendNotification(array $data): array
     {
-        return $this->request()->post('/notifications/send', $data)->json();
+        return $this->request()->post('/notifications', $data)->json();
+    }
+
+    public function sendBulkNotification(array $data): array
+    {
+        return $this->request()->post('/notifications/bulk', $data)->json();
+    }
+
+    // Imports
+    public function createImport(array $data): array
+    {
+        return $this->request()->post('/imports', $data)->json();
+    }
+
+    public function getImportsList(): array
+    {
+        return $this->request()->get('/imports')->json();
+    }
+
+    public function getImportDetail(string $id): array
+    {
+        return $this->request()->get("/imports/{$id}")->json();
+    }
+
+    // Audit Log
+    public function getAuditLog(array $params = []): array
+    {
+        return $this->request()->get('/audit', $params)->json();
+    }
+
+    // Dashboard Stats
+    public function getDashboardStats(string $orgId): array
+    {
+        return $this->request()->get("/organizations/{$orgId}/stats")->json();
+    }
+
+    // Wallets (admin)
+    public function getWalletsList(array $params = []): array
+    {
+        return $this->request()->get('/wallets', $params)->json();
+    }
+
+    public function freezeWallet(string $id): array
+    {
+        return $this->request()->post("/wallets/{$id}/freeze")->json();
+    }
+
+    public function unfreezeWallet(string $id): array
+    {
+        return $this->request()->post("/wallets/{$id}/unfreeze")->json();
+    }
+
+    // Loans (admin actions)
+    public function disburseLoan(string $id): array
+    {
+        return $this->request()->post("/loans/{$id}/disburse")->json();
+    }
+
+    // Benefits (disburse)
+    public function disburseBenefit(string $id): array
+    {
+        return $this->request()->post("/benefits/requests/{$id}/disburse")->json();
     }
 }
