@@ -13,6 +13,8 @@ async function bootstrap() {
       : ['error', 'warn', 'log', 'debug', 'verbose'],
   });
 
+  app.enableShutdownHooks();
+
   // Security headers
   app.use(helmet());
 

@@ -1,0 +1,53 @@
+version: 2
+updates:
+  # npm (root + apps/api + packages/*)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 10
+    reviewers:
+      - "jfrancesia-hue"
+    labels:
+      - "dependencies"
+    groups:
+      nestjs:
+        patterns:
+          - "@nestjs/*"
+      prisma:
+        patterns:
+          - "prisma"
+          - "@prisma/*"
+      expo:
+        patterns:
+          - "expo"
+          - "expo-*"
+          - "@expo/*"
+      testing:
+        patterns:
+          - "jest"
+          - "@types/jest"
+          - "ts-jest"
+          - "supertest"
+          - "@types/supertest"
+          - "vitest"
+
+  # Composer (apps/web-admin)
+  - package-ecosystem: "composer"
+    directory: "/apps/web-admin"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "php"
+
+  # GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "ci"
