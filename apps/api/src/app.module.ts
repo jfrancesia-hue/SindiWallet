@@ -17,6 +17,8 @@ import { ReportsModule } from './reports/reports.module';
 import { AuditModule } from './audit/audit.module';
 import { ImportsModule } from './imports/imports.module';
 import { ChatbotModule } from './chatbot/chatbot.module';
+import { WebsocketModule } from './websocket/websocket.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
 import { AuditInterceptor } from './audit/audit.interceptor';
 
@@ -38,6 +40,8 @@ import { AuditInterceptor } from './audit/audit.interceptor';
     AuditModule,
     ImportsModule,
     ChatbotModule,
+    WebsocketModule,
+    WebhooksModule,
   ],
   controllers: [AppController],
   providers: [

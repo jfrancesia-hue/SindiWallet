@@ -1,14 +1,18 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, Optional } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { EventsGateway } from '../websocket/events.gateway';
 import { CreateNotificationDto, BulkNotificationDto } from './dto/create-notification.dto';
 import { NotificationChannel, Prisma } from '@sindiwallet/db';
 
 @Injectable()
 export class NotificationsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    @Optional() private events?: EventsGateway,
+  ) {}
 
   async create(orgId: string, dto: CreateNotificationDto) {
-    return this.prisma.notification.create({
+    const notification = await this.prisma.notification.create({
       data: {
         orgId,
         userId: dto.userId,
@@ -19,6 +23,16 @@ export class NotificationsService {
         sentAt: new Date(),
       },
     });
+
+    // Emit real-time via WebSocket
+    this.events?.emitNotification(dto.userId, {
+      id: notification.id,
+      title: dto.title,
+      body: dto.body,
+      channel: dto.channel,
+    });
+
+    return notification;
   }
 
   async sendBulk(orgId: string, dto: BulkNotificationDto) {

@@ -1,11 +1,25 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { ClaudeService, ChatContext } from './claude.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { DuePaymentStatus, WalletStatus } from '@sindiwallet/db';
 
 @Injectable()
 export class ChatbotService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ChatbotService.name);
+  private readonly useClaudeApi: boolean;
+
+  constructor(
+    private prisma: PrismaService,
+    private claude: ClaudeService,
+  ) {
+    this.useClaudeApi = !!process.env.ANTHROPIC_API_KEY;
+    if (this.useClaudeApi) {
+      this.logger.log('Claude API habilitada para chatbot');
+    } else {
+      this.logger.warn('ANTHROPIC_API_KEY no configurada — usando fallback rule-based');
+    }
+  }
 
   async sendMessage(orgId: string, userId: string, dto: SendMessageDto) {
     // 1. Obtener o crear sesión
@@ -32,8 +46,24 @@ export class ChatbotService {
     // 3. Generar contexto del afiliado para la IA
     const context = await this.buildUserContext(orgId, userId);
 
-    // 4. Generar respuesta (en producción usaría Claude API)
-    const response = await this.generateResponse(dto.message, context);
+    // 4. Generar respuesta con Claude API o fallback
+    let response: string;
+    if (this.useClaudeApi) {
+      const history = await this.prisma.chatMessage.findMany({
+        where: { sessionId },
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+        select: { role: true, content: true },
+      });
+      // Excluir el mensaje recién guardado (último)
+      const prevHistory = history.slice(0, -1).map((m) => ({
+        role: m.role as 'user' | 'assistant',
+        content: m.content,
+      }));
+      response = await this.claude.chat(dto.message, context as ChatContext, prevHistory);
+    } else {
+      response = await this.generateResponse(dto.message, context);
+    }
 
     // 5. Guardar respuesta
     const assistantMessage = await this.prisma.chatMessage.create({
