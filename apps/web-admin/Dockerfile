@@ -22,7 +22,7 @@ WORKDIR /var/www/html
 
 # Install PHP dependencies
 FROM base AS deps
-COPY composer.json composer.lock ./
+COPY apps/web-admin/composer.json apps/web-admin/composer.lock ./
 RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist
 
 # Build assets
@@ -30,7 +30,7 @@ FROM node:20-alpine AS assets
 WORKDIR /app
 COPY apps/web-admin/package.json apps/web-admin/package-lock.json ./
 RUN npm ci
-COPY apps/web-admin/ .
+COPY apps/web-admin/ ./
 RUN npm run build 2>/dev/null || true
 
 # Production

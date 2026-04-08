@@ -30,7 +30,7 @@ export default function () {
       JSON.stringify({ amount: 50000, termMonths: 12 }),
       { headers: authHeaders(AFFILIATE_ID) },
     );
-    check(res, checkResponse(res, 200));
+    check(res, checkResponse(200));
   });
 
   sleep(1);

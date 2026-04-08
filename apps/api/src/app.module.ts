@@ -22,6 +22,7 @@ import { ChatbotModule } from './chatbot/chatbot.module';
 import { WebsocketModule } from './websocket/websocket.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { SupabaseAuthGuard } from './common/guards/supabase-auth.guard';
+import { RolesGuard } from './common/guards/roles.guard';
 import { AuditInterceptor } from './audit/audit.interceptor';
 import { ComplianceModule } from './common/compliance/compliance.module';
 
@@ -69,6 +70,10 @@ import { ComplianceModule } from './common/compliance/compliance.module';
     {
       provide: APP_GUARD,
       useClass: SupabaseAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RolesGuard,
     },
     {
       provide: APP_GUARD,

@@ -29,12 +29,12 @@ export class BindBaasAdapter implements BaasAdapter {
     this.apiSecret = process.env.BAAS_API_SECRET ?? '';
   }
 
-  private getHeaders(): Record<string, string> {
+  private getHeaders(requestId: string): Record<string, string> {
     return {
       'Content-Type': 'application/json',
       'X-Api-Key': this.apiKey,
       'X-Api-Secret': this.apiSecret,
-      'X-Request-Id': `bind-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      'X-Request-Id': requestId,
     };
   }
 
@@ -44,6 +44,7 @@ export class BindBaasAdapter implements BaasAdapter {
     body?: unknown,
   ): Promise<T> {
     const url = `${this.baseUrl}${path}`;
+    const requestId = `bind-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     let lastError: Error | null = null;
 
     for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
@@ -55,7 +56,7 @@ export class BindBaasAdapter implements BaasAdapter {
 
         const response = await fetch(url, {
           method,
-          headers: this.getHeaders(),
+          headers: this.getHeaders(requestId),
           signal: controller.signal,
           ...(body ? { body: JSON.stringify(body) } : {}),
         });

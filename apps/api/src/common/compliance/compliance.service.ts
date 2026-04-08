@@ -44,8 +44,9 @@ export class ComplianceService {
         ? TRANSACTION_LIMITS.KYC_APPROVED
         : TRANSACTION_LIMITS.KYC_PENDING;
 
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const argDate = new Date(now.toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires' }));
+    const todayStart = new Date(argDate.getFullYear(), argDate.getMonth(), argDate.getDate());
 
     const dailyTotal = await this.prisma.transaction.aggregate({
       where: {
@@ -65,9 +66,7 @@ export class ComplianceService {
     }
 
     // 3. Verificar límite mensual
-    const monthStart = new Date();
-    monthStart.setDate(1);
-    monthStart.setHours(0, 0, 0, 0);
+    const monthStart = new Date(argDate.getFullYear(), argDate.getMonth(), 1);
 
     const monthlyTotal = await this.prisma.transaction.aggregate({
       where: {

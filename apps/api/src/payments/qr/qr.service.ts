@@ -62,9 +62,14 @@ export class QrService {
   async decodeQr(qrData: string): Promise<QrPayload> {
     try {
       const decoded = Buffer.from(qrData, 'base64').toString('utf-8');
-      return JSON.parse(decoded) as QrPayload;
-    } catch {
-      throw new BadRequestException('QR inválido o no reconocido');
+      const parsed = JSON.parse(decoded);
+      if (!parsed.merchant?.cvu || typeof parsed.amount !== 'string' || !parsed.currency) {
+        throw new BadRequestException('QR inválido: faltan campos requeridos');
+      }
+      return parsed as QrPayload;
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('QR inválido o corrupto');
     }
   }
 

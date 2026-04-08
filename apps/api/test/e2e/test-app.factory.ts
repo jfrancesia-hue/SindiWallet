@@ -7,6 +7,7 @@ import { HttpExceptionFilter } from '../../src/common/filters/http-exception.fil
 import { TransformInterceptor } from '../../src/common/interceptors/transform.interceptor';
 import { TestAuthGuard } from './test-auth.guard';
 import { SupabaseService } from '../../src/auth/supabase.service';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { randomUUID } from 'crypto';
 
 export async function createTestApp(): Promise<{
@@ -45,6 +46,8 @@ export async function createTestApp(): Promise<{
       deleteUser: async () => {},
       getClient: () => ({}),
     } as any)
+    .overrideGuard(ThrottlerGuard)
+    .useValue({ canActivate: () => true })
     .compile();
 
   const app = moduleFixture.createNestApplication();

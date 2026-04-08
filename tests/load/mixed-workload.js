@@ -36,13 +36,13 @@ export default function () {
     // 30% — Check wallet balance
     group('Get Wallet', () => {
       const res = http.get(`${BASE_URL}${API_PREFIX}/wallets/me`, { headers });
-      check(res, checkResponse(res));
+      check(res, checkResponse());
     });
   } else if (action < 0.50) {
     // 20% — List transactions
     group('List Transactions', () => {
       const res = http.get(`${BASE_URL}${API_PREFIX}/transactions?page=1&limit=10`, { headers });
-      check(res, checkResponse(res));
+      check(res, checkResponse());
     });
   } else if (action < 0.65) {
     // 15% — Transfer
@@ -66,24 +66,24 @@ export default function () {
         JSON.stringify({ amount: 50000, termMonths: 12 }),
         { headers },
       );
-      check(res, checkResponse(res));
+      check(res, checkResponse());
     });
   } else if (action < 0.85) {
     // 10% — Notifications
     group('Get Notifications', () => {
       const res = http.get(`${BASE_URL}${API_PREFIX}/notifications/my?limit=10`, { headers });
-      check(res, checkResponse(res));
+      check(res, checkResponse());
     });
   } else if (action < 0.95) {
     // 10% — Dues history
     group('Dues History', () => {
       const res = http.get(`${BASE_URL}${API_PREFIX}/dues/my/history`, { headers });
-      check(res, checkResponse(res));
+      check(res, checkResponse());
     });
   } else {
     // 5% — Health check
     group('Health', () => {
-      const res = http.get(`${BASE_URL}/health`);
+      const res = http.get(`${BASE_URL}${API_PREFIX}/health`);
       check(res, { 'health ok': (r) => r.status === 200 });
     });
   }

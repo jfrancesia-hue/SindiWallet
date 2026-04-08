@@ -142,55 +142,76 @@ export class LoansService {
   }
 
   async disburse(orgId: string, loanId: string) {
-    const loan = await this.prisma.loan.findFirst({
-      where: { id: loanId, orgId, status: LoanStatus.APPROVED },
-      include: {
-        user: { include: { wallet: true } },
-        installments: { orderBy: { number: 'asc' }, take: 1 },
-      },
-    });
+    return this.prisma.$transaction(async (tx) => {
+      // SELECT FOR UPDATE to prevent double disbursement
+      const [loan] = await tx.$queryRawUnsafe<any[]>(
+        `SELECT l.*, row_to_json(u.*) as "_user", row_to_json(w.*) as "_wallet"
+         FROM loans l
+         JOIN users u ON u.id = l."userId"
+         LEFT JOIN wallets w ON w."userId" = u.id
+         WHERE l.id = $1 AND l."orgId" = $2
+         FOR UPDATE OF l`,
+        loanId,
+        orgId,
+      );
 
-    if (!loan) throw new NotFoundException('Préstamo aprobado no encontrado');
-    if (!loan.user.wallet || loan.user.wallet.status !== WalletStatus.ACTIVE) {
-      throw new BadRequestException('El usuario no tiene wallet activa');
-    }
+      if (!loan || loan.status !== LoanStatus.APPROVED) {
+        throw new NotFoundException('Préstamo aprobado no encontrado');
+      }
 
-    // Acreditar en la wallet del usuario
-    const [, updatedLoan] = await this.prisma.$transaction([
-      this.prisma.wallet.update({
-        where: { id: loan.user.wallet.id },
+      const wallet = loan._wallet;
+      if (!wallet || wallet.status !== WalletStatus.ACTIVE) {
+        throw new BadRequestException('El usuario no tiene wallet activa');
+      }
+
+      // Idempotency guard: check if disbursement transaction already exists
+      const existing = await tx.transaction.findUnique({
+        where: { idempotencyKey: `LOAN_DISBURSE_${loanId}` },
+      });
+      if (existing) {
+        throw new BadRequestException('Este préstamo ya fue desembolsado');
+      }
+
+      const firstInstallment = await tx.loanInstallment.findFirst({
+        where: { loanId },
+        orderBy: { number: 'asc' },
+      });
+
+      // All operations inside a single transaction
+      await tx.wallet.update({
+        where: { id: wallet.id },
         data: { balance: { increment: new Prisma.Decimal(Number(loan.amount)) } },
-      }),
-      this.prisma.loan.update({
+      });
+
+      const updatedLoan = await tx.loan.update({
         where: { id: loanId },
         data: {
           status: LoanStatus.ACTIVE,
           disbursedAt: new Date(),
-          nextPaymentDate: loan.installments[0]?.dueDate
+          nextPaymentDate: firstInstallment?.dueDate
             ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
         },
         include: { installments: { orderBy: { number: 'asc' }, take: 1 } },
-      }),
-    ]);
+      });
 
-    // Registrar transacción de desembolso
-    await this.prisma.transaction.create({
-      data: {
-        orgId,
-        idempotencyKey: `LOAN_DISBURSE_${loanId}`,
-        type: TransactionType.LOAN_DISBURSEMENT,
-        status: 'COMPLETED',
-        amount: loan.amount,
-        fee: 0,
-        currency: 'ARS',
-        description: `Desembolso préstamo #${loanId.slice(-6)}`,
-        receiverId: loan.userId,
-        walletToId: loan.user.wallet.id,
-        processedAt: new Date(),
-      },
+      await tx.transaction.create({
+        data: {
+          orgId,
+          idempotencyKey: `LOAN_DISBURSE_${loanId}`,
+          type: TransactionType.LOAN_DISBURSEMENT,
+          status: 'COMPLETED',
+          amount: loan.amount,
+          fee: 0,
+          currency: 'ARS',
+          description: `Desembolso préstamo #${loanId.slice(-6)}`,
+          receiverId: loan.userId,
+          walletToId: wallet.id,
+          processedAt: new Date(),
+        },
+      });
+
+      return updatedLoan;
     });
-
-    return updatedLoan;
   }
 
   async getMyLoans(orgId: string, userId: string) {
@@ -250,23 +271,26 @@ export class LoansService {
       );
     }
 
-    // Descontar de wallet + marcar cuota pagada
-    await this.prisma.$transaction([
-      this.prisma.wallet.update({
+    // Descontar de wallet + marcar cuota pagada + verificar si se pagó todo
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.wallet.update({
         where: { id: wallet.id },
         data: { balance: { decrement: installment.amount } },
-      }),
-      this.prisma.loanInstallment.update({
+      });
+
+      await tx.loanInstallment.update({
         where: { id: installment.id },
         data: { status: InstallmentStatus.PAID, paidAt: new Date() },
-      }),
-      this.prisma.loan.update({
+      });
+
+      await tx.loan.update({
         where: { id: loanId },
         data: {
           outstandingBalance: { decrement: installment.amount },
         },
-      }),
-      this.prisma.transaction.create({
+      });
+
+      await tx.transaction.create({
         data: {
           orgId,
           idempotencyKey,
@@ -280,26 +304,28 @@ export class LoansService {
           walletFromId: wallet.id,
           processedAt: new Date(),
         },
-      }),
-    ]);
-
-    // Verificar si se pagó todo
-    const pendingCount = await this.prisma.loanInstallment.count({
-      where: { loanId, status: InstallmentStatus.PENDING },
-    });
-
-    if (pendingCount === 0) {
-      await this.prisma.loan.update({
-        where: { id: loanId },
-        data: { status: LoanStatus.PAID_OFF, outstandingBalance: 0 },
       });
-    }
+
+      // Verificar si se pagó todo — inside the transaction
+      const pendingCount = await tx.loanInstallment.count({
+        where: { loanId, status: InstallmentStatus.PENDING },
+      });
+
+      if (pendingCount === 0) {
+        await tx.loan.update({
+          where: { id: loanId },
+          data: { status: LoanStatus.PAID_OFF, outstandingBalance: 0 },
+        });
+      }
+
+      return pendingCount;
+    });
 
     return {
       installmentNumber: installment.number,
       amount: installment.amount,
-      remainingInstallments: pendingCount,
-      loanStatus: pendingCount === 0 ? 'PAID_OFF' : 'ACTIVE',
+      remainingInstallments: result,
+      loanStatus: result === 0 ? 'PAID_OFF' : 'ACTIVE',
     };
   }
 }

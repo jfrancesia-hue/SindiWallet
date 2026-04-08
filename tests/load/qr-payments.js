@@ -35,7 +35,7 @@ export default function () {
       { headers: authHeaders(MERCHANT_ID) },
     );
 
-    const passed = check(res, checkResponse(res, 200));
+    const passed = check(res, checkResponse(200));
     if (passed) {
       const body = JSON.parse(res.body);
       qrData = body.data?.qrData;
@@ -51,7 +51,7 @@ export default function () {
         JSON.stringify({ qrData }),
         { headers: authHeaders(AFFILIATE_ID) },
       );
-      check(res, checkResponse(res, 200));
+      check(res, checkResponse(200));
     });
 
     sleep(0.5);
@@ -67,7 +67,7 @@ export default function () {
         }),
         { headers: authHeaders(AFFILIATE_ID) },
       );
-      check(res, checkResponse(res));
+      check(res, checkResponse());
     });
   }
 

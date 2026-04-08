@@ -8,16 +8,17 @@ export function authHeaders(userId) {
   };
 }
 
-export function checkResponse(res, expectedStatus = 200) {
+export function checkResponse(expectedStatus = 200) {
   const checks = {};
-  checks[`status is ${expectedStatus}`] = res.status === expectedStatus;
+  checks[`status is ${expectedStatus}`] = (r) => r.status === expectedStatus;
   if (expectedStatus === 200 || expectedStatus === 201) {
-    try {
-      const body = JSON.parse(res.body);
-      checks['response is successful'] = body.success === true;
-    } catch {
-      checks['response is valid JSON'] = false;
-    }
+    checks['response is successful'] = (r) => {
+      try {
+        return JSON.parse(r.body).success === true;
+      } catch {
+        return false;
+      }
+    };
   }
   return checks;
 }

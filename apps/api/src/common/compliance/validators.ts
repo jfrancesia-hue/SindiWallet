@@ -57,11 +57,32 @@ export function isValidCbu(cbu: string): boolean {
 
 /**
  * Valida CVU argentino (22 dígitos, prefijo 000 para entidades virtuales)
+ * Incluye verificación de dígitos verificadores (mismo algoritmo que CBU)
  */
 export function isValidCvu(cvu: string): boolean {
   if (!/^\d{22}$/.test(cvu)) return false;
-  // CVU comienza con 000 (identifica entidad virtual ante BCRA)
-  return cvu.startsWith('000');
+  if (!cvu.startsWith('000')) return false;
+
+  // Verify block 1 check digit (positions 0-7)
+  const digits = cvu.split('').map(Number);
+  const multipliers1 = [7, 1, 3, 7, 1, 3, 7];
+  let sum1 = 0;
+  for (let i = 0; i < 7; i++) {
+    sum1 += digits[i]! * multipliers1[i]!;
+  }
+  const dv1 = (10 - (sum1 % 10)) % 10;
+  if (dv1 !== digits[7]) return false;
+
+  // Verify block 2 check digit (positions 8-21)
+  const multipliers2 = [3, 7, 1, 3, 7, 1, 3, 7, 1, 3, 7, 1, 3];
+  let sum2 = 0;
+  for (let i = 0; i < 13; i++) {
+    sum2 += digits[8 + i]! * multipliers2[i]!;
+  }
+  const dv2 = (10 - (sum2 % 10)) % 10;
+  if (dv2 !== digits[21]) return false;
+
+  return true;
 }
 
 /**

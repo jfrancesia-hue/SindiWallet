@@ -44,6 +44,6 @@ export default function () {
     { headers: authHeaders(SENDER_ID) },
   );
 
-  check(res, checkResponse(res, 200));
+  check(res, checkResponse(200));
   sleep(Math.random() * 2 + 0.5);
 }

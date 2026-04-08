@@ -64,30 +64,7 @@ export class TransactionsService {
   }
 
   async transferCvu(orgId: string, senderId: string, dto: TransferCvuDto) {
-    // Obtener wallet del sender
-    const senderWallet = await this.prisma.wallet.findFirst({
-      where: { userId: senderId, orgId },
-    });
-
-    if (!senderWallet) {
-      throw new NotFoundException('No tenés una wallet activa');
-    }
-
-    if (!senderWallet.cvu) {
-      throw new BadRequestException('Tu wallet no tiene CVU asignado');
-    }
-
-    if (senderWallet.cvu === dto.destinationCvu) {
-      throw new BadRequestException('No podés transferirte a tu propio CVU');
-    }
-
-    const amount = new Prisma.Decimal(dto.amount);
-    if (new Prisma.Decimal(senderWallet.balance).lessThan(amount)) {
-      throw new BadRequestException(
-        `Saldo insuficiente. Disponible: ${senderWallet.balance.toFixed(2)} ARS`,
-      );
-    }
-
+    // Compliance check
     await this.compliance.validateTransaction({
       userId: senderId,
       orgId,
@@ -95,33 +72,72 @@ export class TransactionsService {
       type: 'TRANSFER_CVU',
     });
 
-    // Mock BaaS: descontar el saldo y crear transacción como COMPLETED
-    const [, transaction] = await this.prisma.$transaction([
-      this.prisma.wallet.update({
-        where: { id: senderWallet.id },
-        data: { balance: { decrement: amount } },
-      }),
-      this.prisma.transaction.create({
-        data: {
-          orgId,
-          idempotencyKey: dto.idempotencyKey,
-          type: TransactionType.TRANSFER_CVU,
-          status: TransactionStatus.COMPLETED,
-          amount,
-          fee: new Prisma.Decimal(0),
-          currency: 'ARS',
-          description: dto.description,
-          senderId,
-          walletFromId: senderWallet.id,
-          reference: dto.destinationCvu,
-          baasTransactionId: `MOCK_${Date.now()}`,
-          processedAt: new Date(),
-          metadata: { destinationCvu: dto.destinationCvu },
-        },
-      }),
-    ]);
+    return this.prisma.$transaction(
+      async (tx) => {
+        // Lock wallet with SELECT FOR UPDATE
+        const wallets = await tx.$queryRaw<
+          Array<{ id: string; balance: any; cvu: string | null; status: string }>
+        >`SELECT id, balance, cvu, status FROM wallets WHERE user_id = ${senderId} AND org_id = ${orgId} FOR UPDATE`;
 
-    return transaction;
+        if (!wallets || wallets.length === 0) {
+          throw new NotFoundException('No tenés una wallet activa');
+        }
+
+        const senderWallet = wallets[0]!;
+
+        if (!senderWallet.cvu) {
+          throw new BadRequestException('Tu wallet no tiene CVU asignado');
+        }
+
+        if (senderWallet.status !== 'ACTIVE') {
+          throw new BadRequestException('Tu wallet no está activa');
+        }
+
+        if (senderWallet.cvu === dto.destinationCvu) {
+          throw new BadRequestException('No podés transferirte a tu propio CVU');
+        }
+
+        const amount = new Prisma.Decimal(dto.amount);
+        const balance = new Prisma.Decimal(senderWallet.balance);
+        if (balance.lessThan(amount)) {
+          throw new BadRequestException(
+            `Saldo insuficiente. Disponible: ${balance.toFixed(2)} ARS`,
+          );
+        }
+
+        // Decrement balance
+        await tx.wallet.update({
+          where: { id: senderWallet.id },
+          data: { balance: { decrement: amount } },
+        });
+
+        // Create transaction record
+        const transaction = await tx.transaction.create({
+          data: {
+            orgId,
+            idempotencyKey: dto.idempotencyKey,
+            type: TransactionType.TRANSFER_CVU,
+            status: TransactionStatus.COMPLETED,
+            amount,
+            fee: new Prisma.Decimal(0),
+            currency: 'ARS',
+            description: dto.description,
+            senderId,
+            walletFromId: senderWallet.id,
+            reference: dto.destinationCvu,
+            baasTransactionId: `MOCK_${Date.now()}`,
+            processedAt: new Date(),
+            metadata: { destinationCvu: dto.destinationCvu },
+          },
+        });
+
+        return transaction;
+      },
+      {
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        timeout: 10000,
+      },
+    );
   }
 
   async findAll(orgId: string, filters: TransactionFilterDto) {

@@ -7,7 +7,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { EventsGateway } from '../websocket/events.gateway';
 import { BaasWebhookDto } from './dto/baas-webhook.dto';
 import { TransactionStatus, TransactionType, Prisma } from '@sindiwallet/db';
-import { createHmac } from 'crypto';
+import { createHmac, timingSafeEqual } from 'crypto';
 
 @Injectable()
 export class WebhooksService {
@@ -21,11 +21,16 @@ export class WebhooksService {
   async handleBaasWebhook(dto: BaasWebhookDto, rawBody: string) {
     // 1. Verificar firma HMAC si está configurado
     const webhookSecret = process.env.BAAS_WEBHOOK_SECRET;
-    if (webhookSecret && dto.signature) {
+    if (webhookSecret) {
+      if (!dto.signature) {
+        throw new UnauthorizedException('Firma de webhook requerida');
+      }
       const expected = createHmac('sha256', webhookSecret)
         .update(rawBody)
         .digest('hex');
-      if (dto.signature !== expected) {
+      const expectedBuf = Buffer.from(expected, 'hex');
+      const signatureBuf = Buffer.from(dto.signature, 'hex');
+      if (expectedBuf.length !== signatureBuf.length || !timingSafeEqual(expectedBuf, signatureBuf)) {
         throw new UnauthorizedException('Firma de webhook inválida');
       }
     }
