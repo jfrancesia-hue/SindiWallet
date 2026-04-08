@@ -6,6 +6,7 @@ export async function cleanDatabase(prisma: PrismaService) {
   await prisma.chatMessage.deleteMany();
   await prisma.chatSession.deleteMany();
   await prisma.auditLog.deleteMany();
+  await prisma.deviceToken.deleteMany();
   await prisma.notification.deleteMany();
   await prisma.importJob.deleteMany();
   await prisma.report.deleteMany();

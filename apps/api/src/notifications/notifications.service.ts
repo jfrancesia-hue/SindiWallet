@@ -7,8 +7,6 @@ import { NotificationChannel, Prisma } from '@sindiwallet/db';
 
 @Injectable()
 export class NotificationsService {
-  private deviceTokens = new Map<string, { token: string; platform: string; deviceId: string }[]>();
-
   constructor(
     private prisma: PrismaService,
     private firebase: FirebaseService,
@@ -38,20 +36,23 @@ export class NotificationsService {
 
     // Send push notification via FCM
     if (dto.channel === 'PUSH' && this.firebase.isEnabled) {
-      const devices = this.deviceTokens.get(dto.userId) ?? [];
-      const tokens = devices.map((d) => d.token);
+      const devices = await this.prisma.deviceToken.findMany({
+        where: { userId: dto.userId, isActive: true },
+        select: { fcmToken: true },
+      });
+      const tokens = devices.map((d) => d.fcmToken);
       if (tokens.length > 0) {
         const result = await this.firebase.sendToMultiple(
           tokens,
           { title: dto.title, body: dto.body },
           dto.data as Record<string, string> | undefined,
         );
-        // Remove invalid tokens
+        // Deactivate invalid tokens
         if (result.failedTokens.length > 0) {
-          const validDevices = devices.filter(
-            (d) => !result.failedTokens.includes(d.token),
-          );
-          this.deviceTokens.set(dto.userId, validDevices);
+          await this.prisma.deviceToken.updateMany({
+            where: { fcmToken: { in: result.failedTokens } },
+            data: { isActive: false },
+          });
         }
       }
     }
@@ -132,19 +133,20 @@ export class NotificationsService {
     return { unread: count };
   }
 
-  registerDevice(userId: string, fcmToken: string, platform: string, deviceId: string) {
-    const devices = this.deviceTokens.get(userId) ?? [];
-    // Replace existing entry for same deviceId
-    const filtered = devices.filter((d) => d.deviceId !== deviceId);
-    filtered.push({ token: fcmToken, platform, deviceId });
-    this.deviceTokens.set(userId, filtered);
+  async registerDevice(userId: string, fcmToken: string, platform: string, deviceId: string) {
+    await this.prisma.deviceToken.upsert({
+      where: { userId_deviceId: { userId, deviceId } },
+      update: { fcmToken, platform, isActive: true },
+      create: { userId, fcmToken, platform, deviceId },
+    });
     return { registered: true };
   }
 
-  unregisterDevice(userId: string, fcmToken: string) {
-    const devices = this.deviceTokens.get(userId) ?? [];
-    const filtered = devices.filter((d) => d.token !== fcmToken);
-    this.deviceTokens.set(userId, filtered);
+  async unregisterDevice(userId: string, fcmToken: string) {
+    await this.prisma.deviceToken.updateMany({
+      where: { userId, fcmToken },
+      data: { isActive: false },
+    });
     return { unregistered: true };
   }
 }
