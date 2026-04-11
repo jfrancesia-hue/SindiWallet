@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         with:
           version: 9.15.0
 
@@ -72,7 +72,7 @@ jobs:
             mobile:
               - 'apps/mobile/**'
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
         if: steps.changes.outputs.mobile == 'true'
         with:
           version: 9.15.0
